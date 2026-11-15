@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Remote Screen</string>
+    <string name="touch_service_label">Remote Screen input</string>
+    <string name="touch_service_description">Lets the paired receiver tap, swipe and press Back/Home on this device while you share your screen. Nothing is injected unless a session is approved here.</string>
+</resources>

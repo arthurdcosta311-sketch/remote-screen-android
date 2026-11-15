@@ -1,0 +1,36 @@
+name: RemoteScreen
+options:
+  bundleIdPrefix: dev.remotescreen
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  RemoteScreen:
+    type: application
+    platform: iOS
+    sources:
+      - RemoteScreen
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: Remote Screen
+        UILaunchScreen: {}
+        NSLocalNetworkUsageDescription: Remote Screen connects to your paired Android phone on the local network.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.remotescreen.receiver
+        TARGETED_DEVICE_FAMILY: "1,2"

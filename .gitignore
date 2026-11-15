@@ -1,0 +1,14 @@
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+captures/
+
+
+ios/RemoteScreen.xcodeproj/
+ios/Support/
+ios/build/
+ios/Payload/
+ios/*.ipa
