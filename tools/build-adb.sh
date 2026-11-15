@@ -33,7 +33,7 @@ clone "$SRC/external/zstd" "https://android.googlesource.com/platform/external/z
 clone "$SRC/external/brotli" "https://android.googlesource.com/platform/external/brotli"
 clone "$SRC/external/protobuf" "https://github.com/protocolbuffers/protobuf.git"
 
-say "protoc 3.19.4"
+say "protoc 3.19.4 (and host headers for find_package(Protobuf))"
 if ! protoc --version 2>/dev/null | grep -q '3\.19\.4'; then
     work="$(mktemp -d)"
     curl -fsSL -o "$work/protobuf.tar.gz" \
@@ -42,12 +42,13 @@ if ! protoc --version 2>/dev/null | grep -q '3\.19\.4'; then
     (
         cd "$work/protobuf-3.19.4"
         ./configure --disable-shared --prefix="$work/install"
-        make -j8 protoc
-        mkdir -p "$work/install/bin"
-        install -m755 src/protoc "$work/install/bin/protoc"
+        make -j8
+        make install
     )
     export PATH="$work/install/bin:$PATH"
+    export CMAKE_PREFIX_PATH="$work/install${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
 fi
+export CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-}"
 protoc --version
 
 say "libadb for iphoneos/arm64"
