@@ -18,10 +18,12 @@ import android.content.Context
  * Android's own wireless-debugging pairing cannot be reached from inside an
  * app: Android 11+ pairs a debugging *host* over TLS with a SPAKE2 key
  * exchange, implemented only in Android's BoringSSL, and the endpoint further
- * requires the client certificate that pairing produced. Neither the Android
- * SDK nor an iPhone can perform that handshake, so `adb pair` stays a
- * computer-side tool. Enabling wireless debugging on the phone therefore does
- * not give this app a shell — root and device owner are the real doors.
+ * requires the client certificate that pairing produced. So this app cannot
+ * pair with its own adbd. The iPhone receiver can, because it links a port of
+ * AOSP's adb that carries the pairing client and BoringSSL; it reaches that
+ * through this phone's `wireless` and `adbports` commands. Wireless debugging
+ * therefore gives *this* app no shell — root and device owner stay the doors on
+ * this side, and the receiver's adb is the third door.
  */
 object Access {
 

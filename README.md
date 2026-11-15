@@ -87,10 +87,10 @@ Each paired phone then offers **Mirror**, **Second screen** and **Console**.
    the receiver a console: `access`, `apps`, `ps`, `inspect`, `start`, `kill`,
    `stop`, `disable`, `enable`, `uninstall`, `rotate`, `brightness`, `timeout`,
    `volume`, `key`, `tap`, `swipe`, `open`, `notify`, `reboot`, `mirror`,
-   `lock` and `shell <command>`. Most of it needs no unlock; `access` says
-   exactly what this install may do. Two permissions add the rest: *Modify
-   system settings* (rotation, brightness, screen timeout) and *Install unknown
-   apps* (the APK push).
+   `wireless`, `adbports`, `lock` and `shell <command>`. Most of it needs no
+   unlock; `access` says exactly what this install may do. Two permissions add the
+   rest: *Modify system settings* (rotation, brightness, screen timeout) and
+   *Install unknown apps* (the APK push).
 8. **Push an APK** from the receiver's console toolbar button: the file goes
    over the encrypted session into the phone's cache, and the phone posts a
    notification that opens Android's install dialog.
@@ -116,23 +116,38 @@ the top of the phone's screen shows which one it has:
   (`disable`, `enable`) and `reboot`. Force-stop still needs root: Android
   gives no ordinary app that power.
 
-**Wireless debugging opens one door: from the iPhone.** The Android app cannot
-reach adbd — Android pairs debugging *hosts* over TLS with a SPAKE2 key
-exchange that the Android SDK does not expose, so no code running inside the
-phone can pair with its own adbd. The iPhone receiver can, because it links
-[`adb-mobile`](adb-mobile-adb_v31.0.3), a port of AOSP's adb 31.0.3 including
-the pairing client and BoringSSL. On the phone open Developer options →
-Wireless debugging → **Pair device with pairing code**, then in the receiver
-tap **ADB** on that phone, type the pairing port and the six digits, tap
-**Pair**, type the other port on the same screen and tap **Connect**. From
-there `adb shell` runs as the phone's `shell` user, so force-stop,
+**Wireless debugging is the pairing mode, driven from the iPhone.** The Android app
+cannot pair with its own adbd: Android pairs debugging *hosts* over TLS with a
+SPAKE2 key exchange that exists only in Android's BoringSSL, so no code running
+inside the phone can do it. The iPhone receiver can, because it links
+[`adb-mobile`](adb-mobile-adb_v31.0.3), a port of AOSP's adb 31.0.3 including the
+pairing client and BoringSSL. The receiver also drives the phone's side, so the
+only thing typed by hand is the six digits Android itself shows:
+
+1. On the phone, **Start remote shell** (the receiver's setup steps go through it).
+2. In the receiver tap **ADB** on that phone, then **1. Open Wireless debugging on
+   the phone**. The phone opens Settings → Wireless debugging (or, when Android
+   blocks a background activity start, posts a notification that opens it), and
+   the receiver records which ports adbd already has open.
+3. On the phone switch wireless debugging on and tap **Pair device with pairing
+   code**. Back in the receiver tap **2. Scan for the pairing port**: the port that
+   was not open a moment ago is the pairing one, and the one that was already open
+   is the connect port.
+4. Type the six digits and tap **Pair**. If the guess was wrong the receiver tries
+   the phone's other open ports before giving up. **Connect** is already filled in.
+
+From there `adb shell` runs as the phone's `shell` user, so force-stop,
 `pm disable-user`, `adb install` and `reboot` all work without root or a
 device-owner install.
 
+The phone side of that is two shell commands, also on chips in the receiver's
+console: `wireless` opens the screen, `adbports` lists adbd's localhost ports with
+a note on which is which.
+
 The bridge is compiled only when `tools/build-adb.sh` produced
-`ios/adb/lib/libadb-iphoneos-arm64.a`. The release workflow runs it and turns
-the feature on when it succeeds; without it the app builds and runs as before,
-just without the **ADB** button.
+`ios/adb/lib/libadb-iphoneos-arm64.a`. The release workflow runs it and turns the
+feature on when it succeeds; without it the **ADB** button still appears and
+explains that this build has no adb library.
 
 ## Security model
 

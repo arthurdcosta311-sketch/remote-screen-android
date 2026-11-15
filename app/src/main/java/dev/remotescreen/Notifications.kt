@@ -20,6 +20,7 @@ object Notifications {
     const val ID_SHELL = 4104
     const val ID_REQUEST = 4105
     const val ID_APK = 4106
+    const val ID_WIRELESS = 4107
 
     fun ensureChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
@@ -116,6 +117,34 @@ object Notifications {
                     Notification.BigTextStyle().bigText(
                         "A paired receiver asked to see this screen. Android asks you to allow " +
                             "capture every time; tap here to show that dialog."
+                    )
+                )
+                .setAutoCancel(true)
+                .setContentIntent(open)
+                .build()
+        )
+    }
+
+    /**
+     * A receiver wants to pair with this phone's adb. Android refuses activity
+     * starts from the background, so tapping this notification is what opens the
+     * wireless-debugging screen.
+     */
+    fun wirelessRequest(ctx: Context) {
+        ensureChannels(ctx)
+        val manager = ctx.getSystemService(NotificationManager::class.java) ?: return
+        val open = openApp(ctx, 24) { putExtra(MainActivity.EXTRA_WIRELESS, true) }
+        manager.notify(
+            ID_WIRELESS,
+            Notification.Builder(ctx, CHANNEL_APPROVAL)
+                .setSmallIcon(R.drawable.ic_stat_bridge)
+                .setContentTitle("Open Wireless debugging?")
+                .setContentText("A paired receiver wants to pair with this phone's adb. Tap to open the screen.")
+                .setStyle(
+                    Notification.BigTextStyle().bigText(
+                        "A paired receiver wants to pair with this phone's adb. Tap here to open " +
+                            "Settings → Wireless debugging, switch it on and tap \"Pair device with " +
+                            "pairing code\". The six digits it shows are typed in the receiver."
                     )
                 )
                 .setAutoCancel(true)

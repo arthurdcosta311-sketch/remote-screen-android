@@ -17,14 +17,44 @@ struct RemoteScreenApp: App {
 // MARK: - Phone list
 
 extension View {
-    /// The ADB screen exists only in builds that linked libadb.
-    @ViewBuilder
+    /// The ADB screen is always reachable; a build without libadb explains what is
+    /// missing instead of hiding the button.
     func adbSheet(phone: Binding<PairedPhone?>) -> some View {
-        #if ADB_MOBILE
-        sheet(item: phone) { entry in AdbView(phone: entry) }
-        #else
-        self
-        #endif
+        sheet(item: phone) { entry in
+            #if ADB_MOBILE
+            AdbView(phone: entry)
+            #else
+            AdbMissingView(phone: entry)
+            #endif
+        }
+    }
+}
+
+/// Shown when this IPA was built without adb-mobile (`tools/build-adb.sh`).
+struct AdbMissingView: View {
+    let phone: PairedPhone
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("adb is not in this build") {
+                    Text("This IPA has no adb library, so it cannot pair with the phone's wireless debugging. The release workflow runs tools/build-adb.sh before generating the Xcode project; if that step failed, its log names the reason.")
+                        .font(.footnote)
+                }
+                Section("What still works") {
+                    Text("Mirror, Second screen and Console talk to the phone app directly and need no adb. Console → Access shows what the phone app itself may do, and its Wireless debugging chips open that screen on the phone.")
+                        .font(.footnote)
+                }
+            }
+            .navigationTitle(phone.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
     }
 }
 
@@ -63,10 +93,8 @@ struct ContentView: View {
                                 .buttonStyle(.bordered)
                             Button("Console") { shellPhone = phone }
                                 .buttonStyle(.bordered)
-                            #if ADB_MOBILE
                             Button("ADB") { adbPhone = phone }
                                 .buttonStyle(.bordered)
-                            #endif
                         }
                         .font(.footnote)
                     }

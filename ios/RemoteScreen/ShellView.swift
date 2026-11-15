@@ -168,6 +168,8 @@ struct ShellView: View {
                     run("ps")
                     tab = 2
                 }
+                chip("Wireless debugging") { run("wireless") }
+                chip("ADB ports") { run("adbports") }
                 chip("Help") { run("help") }
                 chip("Restart") { confirmReboot = true }
             }

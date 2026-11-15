@@ -62,6 +62,11 @@ class MainActivity : Activity() {
             askProjection()
             return
         }
+        if (intent.getBooleanExtra(EXTRA_WIRELESS, false)) {
+            intent.removeExtra(EXTRA_WIRELESS)
+            openAdb()
+            return
+        }
         val path = intent.getStringExtra(EXTRA_APK)
         if (path != null) {
             intent.removeExtra(EXTRA_APK)
@@ -288,20 +293,45 @@ class MainActivity : Activity() {
             )
         }
         summary.append(
-            "Android's own pairing shows its code in that dialog; on the receiver run " +
-                "adb pair <ip>:<port>. This app's pairing on port ${Ports.PAIR} is a separate " +
-                "protocol; it does not proxy adb, because adb needs the adbd daemon and its " +
-                "host key exchange."
+            "Pairing mode: tap \"Open wireless debugging\" below, switch it on, then tap " +
+                "\"Pair device with pairing code\". Android shows a port and six digits; type both " +
+                "in the receiver's ADB screen, tap Pair, then type the port shown at the top of " +
+                "that same screen and tap Connect. From then on the receiver's adb runs as the " +
+                "phone's shell user, so force-stop, pm disable-user, install and reboot all work.\n\n" +
+                "This app cannot pair with its own adbd (the pairing key exchange is only in " +
+                "Android's BoringSSL), but the receiver can, because it links a port of AOSP's adb. " +
+                "Its pairing on port ${Ports.PAIR} is a separate protocol and is unrelated to adb."
         )
         AlertDialog.Builder(this)
             .setTitle("ADB / wireless debugging")
             .setMessage(summary.toString())
-            .setPositiveButton("Open developer options") { _, _ ->
+            .setPositiveButton("Open wireless debugging") { _, _ ->
+                toast(Wireless.openSettings(this))
+            }
+            .setNeutralButton("Developer options") { _, _ ->
                 runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
                     .onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    /** The receiver asked for adbd's ports; scanning takes a few seconds. */
+    private fun findAdbPorts() {
+        toast("Looking for adbd's ports…")
+        Thread {
+            val report = Wireless.report(this)
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle("Wireless debugging ports")
+                    .setMessage(report)
+                    .setPositiveButton("Open wireless debugging") { _, _ ->
+                        toast(Wireless.openSettings(this))
+                    }
+                    .setNegativeButton("Close", null)
+                    .show()
+            }
+        }.start()
     }
 
     private fun openAccessibility() {
@@ -384,7 +414,7 @@ class MainActivity : Activity() {
         root.addView(section("ACCESS LEVEL"))
         accessView = body("checking…", "#3DDC97").apply { typeface = Typeface.MONOSPACE }
         root.addView(accessView)
-        root.addView(body("Wireless debugging does not help this app. Since Android 11 the phone pairs a debugging host over TLS with a SPAKE2 key exchange that exists only in Android's own BoringSSL, so adb pair runs on a computer, and the debugging port refuses anything that was not paired. Two things do unlock the rest on the phone itself:"))
+        root.addView(body("Wireless debugging is the one thing this app cannot use itself: since Android 11 the phone pairs a debugging host over TLS with a SPAKE2 key exchange that exists only in Android's own BoringSSL. The receiver can, because it links a port of AOSP's adb — so the wireless-debugging section below is what gives it a shell user. On this side, two things unlock the rest:"))
         root.addView(action("Test root") { testRoot() })
         root.addView(body("Rooted phone: grant the prompt and force-stop, disable, uninstall and reboot all work.", "#5B6673", 12f))
         root.addView(action("Copy device-owner command") { copyOwnerCommand() })
@@ -400,7 +430,9 @@ class MainActivity : Activity() {
         root.addView(body("Needed by the receiver's APK push. Android still shows its install dialog.", "#5B6673", 12f))
 
         root.addView(section("ADB / WIRELESS DEBUGGING"))
-        root.addView(body("Android's wireless debugging is separate from this app; a device-owner install can switch it on for you."))
+        root.addView(body("The receiver's adb pairs with this phone's own wireless debugging, so it gets a real shell user. Start it here: open the screen, switch wireless debugging on, tap \"Pair device with pairing code\", and type the port and six digits in the receiver."))
+        root.addView(action("Open wireless debugging") { toast(Wireless.openSettings(this)) })
+        root.addView(action("Find adbd ports") { findAdbPorts() })
         root.addView(action("ADB settings") { openAdb() })
 
         root.addView(body("\nReceivers are stored encrypted with a key that never leaves this device's Keystore.", "#5B6673"))
@@ -513,5 +545,6 @@ class MainActivity : Activity() {
         /** Notification extras the remote shell uses to reach this screen. */
         const val EXTRA_MIRROR = "start_mirror"
         const val EXTRA_APK = "apk_path"
+        const val EXTRA_WIRELESS = "open_wireless"
     }
 }

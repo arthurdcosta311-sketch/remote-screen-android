@@ -77,6 +77,8 @@ class ShellEngine(private val ctx: Context) {
                 "key" -> Result(0, key(pkg), "")
                 "tap" -> Result(0, tap(args), "")
                 "swipe" -> Result(0, swipe(args), "")
+                "wireless", "adbsettings" -> Result(0, Wireless.openSettings(ctx), "")
+                "adbports", "adb-ports" -> Result(0, Wireless.report(ctx), "")
                 "shell" -> shell(args.joinToString(" "))
                 else -> Result(127, "", "unknown command '$cmd' — try help\n")
             }
@@ -565,14 +567,17 @@ class ShellEngine(private val ctx: Context) {
                                     root or device owner
             mirror                  ask the phone to start screen mirroring
             lock                    lock the screen
+            ── wireless debugging (the receiver's adb) ─
+            wireless                open Settings → Wireless debugging on the phone
+            adbports                adbd's localhost ports, for the receiver to pair with
             ── anything else ────────────────────────
             shell <command>         /system/bin/sh, as this app's uid
 
         APKs are pushed from the receiver and installed after the owner taps
-        Android's install dialog. Wireless-debugging pairing is not reachable
-        from inside an app (Android pairs hosts over TLS with SPAKE2 in its own
-        BoringSSL), so run `access` to see what root or a device-owner install
-        would add. Nothing here bypasses a consent screen.
+        Android's install dialog. This app cannot pair with its own adbd, but the
+        iPhone receiver can: it runs real adb, and `wireless` plus `adbports` give
+        it the screen and the ports, so the only thing typed is the six-digit code
+        Android itself shows. Nothing here bypasses a consent screen.
         """.trimIndent() + "\n"
     }
 }
