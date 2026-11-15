@@ -8,7 +8,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "dev.remotescreen"
+        applicationId = "com.projectbysketch.inputbridge"
         minSdk = 34
         targetSdk = 34
         versionCode = 1

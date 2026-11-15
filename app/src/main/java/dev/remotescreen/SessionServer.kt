@@ -171,7 +171,11 @@ class SessionServer(
         )
         val manager = ctx.getSystemService(NotificationManager::class.java)
         return try {
-            val what = if (mode == "mirror") "mirror your screen" else "open the second display"
+            val what = when (mode) {
+                "mirror" -> "mirror your screen"
+                "virtual" -> "open the second display"
+                else -> "run commands on this phone"
+            }
             manager.notify(
                 Notifications.ID_APPROVAL,
                 Notifications.approval(

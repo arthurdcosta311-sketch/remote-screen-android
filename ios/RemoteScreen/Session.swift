@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import CryptoKit
 import UIKit
 
@@ -74,6 +75,7 @@ final class SessionModel: ObservableObject {
     @Published var ended = false
     @Published var videoSize = CGSize.zero
     @Published var touchEnabled = false
+    @Published var keysEnabled = false
 
     let renderer = VideoRenderer()
     let phone: PairedPhone
@@ -151,6 +153,8 @@ final class SessionModel: ObservableObject {
         let h = (obj["height"] as? NSNumber)?.doubleValue ?? 0
         if w > 0, h > 0 { videoSize = CGSize(width: w, height: h) }
         touchEnabled = (obj["touch"] as? Bool) ?? false
+        // Older phones only send "touch"; without it, keys follow the same rule.
+        keysEnabled = (obj["keys"] as? Bool) ?? touchEnabled
     }
 
     private func handleFrame(_ payload: Data) {

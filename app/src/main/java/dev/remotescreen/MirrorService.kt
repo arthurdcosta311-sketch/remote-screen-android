@@ -109,6 +109,7 @@ class MirrorService : Service() {
                         .put("height", h)
                         .put("fps", f)
                         .put("touch", TouchService.instance != null)
+                        .put("keys", TouchService.instance != null)
                 )
             },
             onFrame = { data, key, pts -> stream.sendFrame(data, key, pts) },

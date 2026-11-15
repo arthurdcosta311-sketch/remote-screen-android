@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
@@ -21,6 +22,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import java.io.File
 
 class MainActivity : Activity() {
 
@@ -28,6 +30,7 @@ class MainActivity : Activity() {
     private lateinit var peersView: LinearLayout
     private lateinit var adminButton: Button
     private lateinit var touchButton: Button
+    private lateinit var shellButton: Button
     private lateinit var unattendedSwitch: Switch
     private var pairing: PairingServer? = null
     private var pairingStatus: String = ""
@@ -38,6 +41,29 @@ class MainActivity : Activity() {
         setContentView(buildUi())
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFICATIONS)
+        }
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** Notifications from the shell: "start mirroring" and "install this APK". */
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        if (intent.getBooleanExtra(EXTRA_MIRROR, false)) {
+            intent.removeExtra(EXTRA_MIRROR)
+            askProjection()
+            return
+        }
+        val path = intent.getStringExtra(EXTRA_APK)
+        if (path != null) {
+            intent.removeExtra(EXTRA_APK)
+            val file = File(path)
+            if (file.exists()) Installer.install(this, file) else toast("That APK is no longer there")
         }
     }
 
@@ -135,8 +161,38 @@ class MainActivity : Activity() {
     private fun stopAll() {
         stopService(Intent(this, MirrorService::class.java))
         stopService(Intent(this, VirtualScreenService::class.java))
+        stopService(Intent(this, ShellService::class.java))
         toast("Sessions stopped")
         refresh()
+    }
+
+    // ----------------------------------------------------------------- shell
+
+    private fun toggleShell() {
+        if (ShellService.running) {
+            stopService(Intent(this, ShellService::class.java))
+            toast("Remote shell stopped")
+        } else {
+            startForegroundService(Intent(this, ShellService::class.java))
+            toast("Remote shell listening on port ${Ports.SHELL}")
+        }
+        refresh()
+    }
+
+    private fun requestWriteSettings() {
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName"))
+            )
+        }.onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+    }
+
+    private fun requestInstallApps() {
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+            )
+        }.onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
     // ------------------------------------------------------------------ admin
@@ -290,6 +346,15 @@ class MainActivity : Activity() {
         root.addView(row)
         root.addView(body("Off by default. When off, every session waits for your Allow/Deny notification. Turning it on still needs a receiver that already paired here, and the session notification stays visible."))
 
+        root.addView(section("REMOTE SHELL (ADB-STYLE)"))
+        root.addView(body("A command line for a paired receiver on port ${Ports.SHELL}: app and process lists, start / kill / disable / uninstall, rotation, mirroring, and pushing an APK. Android gives ordinary apps no adbd, so commands that need system rights use root or the device owner and say so when they cannot."))
+        shellButton = action("Start remote shell") { toggleShell() }
+        root.addView(shellButton)
+        root.addView(action("Allow changing system settings") { requestWriteSettings() })
+        root.addView(body("Needed by \"rotate\". Android also asks you in Settings.", "#5B6673", 12f))
+        root.addView(action("Allow app installs") { requestInstallApps() })
+        root.addView(body("Needed by the receiver's APK push. Android still shows its install dialog.", "#5B6673", 12f))
+
         root.addView(section("ADB / WIRELESS DEBUGGING"))
         root.addView(body("Android's wireless debugging is separate from this app; a device-owner install can switch it on for you."))
         root.addView(action("ADB settings") { openAdb() })
@@ -311,6 +376,7 @@ class MainActivity : Activity() {
             append("\n\nMirroring: ${if (MirrorService.running) "running" else "off"}")
             append("\nSecond display: ${if (VirtualScreenService.running) "running" else "off"}")
             append("\nInput bridge: ${if (TouchService.instance != null) "on" else "off"}")
+            append("\nRemote shell: ${if (ShellService.running) "on (port ${Ports.SHELL})" else "off"}")
             append("\nPairing listener: ${if (pairing != null) "on" else "off"}")
             if (pairingStatus.isNotBlank()) append("\n\n$pairingStatus")
         }
@@ -319,6 +385,8 @@ class MainActivity : Activity() {
             if (isAdmin()) "Disable device administrator" else "Enable device administrator"
         touchButton.text =
             if (TouchService.instance != null) "Accessibility input: on" else "Open accessibility settings"
+        shellButton.text =
+            if (ShellService.running) "Stop remote shell" else "Start remote shell"
         unattendedSwitch.isChecked = PairingStore.unattended(this)
         renderPeers()
     }
@@ -393,8 +461,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private companion object {
+    companion object {
         const val REQ_CAPTURE = 1001
         const val REQ_NOTIFICATIONS = 1002
+
+        /** Notification extras the remote shell uses to reach this screen. */
+        const val EXTRA_MIRROR = "start_mirror"
+        const val EXTRA_APK = "apk_path"
     }
 }

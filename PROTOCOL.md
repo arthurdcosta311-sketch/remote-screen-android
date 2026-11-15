@@ -9,6 +9,7 @@ Everything is big-endian. All crypto is standard: **P-256 ECDH**, **HKDF-SHA256*
 | 7000 | Pairing handshake (only while the app is open) |
 | 7001 | Mirrored screen stream |
 | 7002 | Second (virtual) display stream |
+| 7003 | Remote shell: commands, app/process lists, APK push |
 
 A receiver that has paired can reconnect to 7001/7002 at any time the phone has
 the corresponding service running.
@@ -112,7 +113,7 @@ sealed blob           AES-256-GCM(plaintext)
 | type | name | payload |
 | --- | --- | --- |
 | 0x10 | CONTROL | UTF-8 JSON (see below) |
-| 0x11 | VIDEO_INFO | UTF-8 JSON: `{"t":"video","mode":"mirror"\|"virtual","codec":"avc","width":W,"height":H,"fps":F,"touch":bool}` |
+| 0x11 | VIDEO_INFO | UTF-8 JSON: `{"t":"video","mode":"mirror"\|"virtual","codec":"avc","width":W,"height":H,"fps":F,"touch":bool,"keys":bool}` |
 | 0x12 | VIDEO_FRAME | `u8 flags` (bit0 = key frame) · `u64 ptsUs` · Annex-B H.264 bytes |
 | 0x13 | BYE | empty |
 
@@ -137,7 +138,10 @@ VideoToolbox from any IDR it receives.
 
 `x`/`y` are normalised 0..1 against the video frame. Touch input only works
 when the phone's accessibility service is enabled; otherwise the stream is
-view-only (`"touch":false`).
+view-only (`"touch":false`). `"keys":bool` in `VIDEO_INFO` is the same test
+for the phone-wide `key` actions and for typing: the second display is
+`"touch":false, "keys":true` because taps there make no sense but Back/Home
+still do.
 
 ## 5. Notes for the iOS receiver
 
@@ -159,7 +163,33 @@ view-only (`"touch":false`).
 * Latency: the phone encodes 1280-wide H.264 at 3 Mbit/s (mirror) or 2 Mbit/s
   (second display). On a busy Wi-Fi link lower the expectation, not the code.
 
-## 6. Why this is not the ADB protocol
+## 6. Remote shell (port 7003)
+
+The same handshake, approval and AES-GCM framing as 7001/7002; only the message
+types differ. Every request is a `CONTROL` message with an `id` the receiver
+chooses; the phone answers with the same `id`.
+
+```
+{"t":"exec","id":7,"cmd":"apps user"}                receiver → phone
+{"t":"shell","id":7,"code":0,"out":"…","err":"…"}    phone → receiver
+```
+
+The command line is the phone's app-level shell (`help` lists it): `apps`,
+`ps`, `inspect`, `start`, `kill`, `stop`, `disable`, `enable`, `uninstall`,
+`rotate`, `reboot`, `mirror`, `lock`, `shell`. Commands that need system rights
+use root or the device owner and fail with a message when neither is there.
+
+APK push is chunked, base64 in JSON, and always ends with Android's own install
+dialog:
+
+```
+{"t":"apk","id":9,"name":"app.apk","size":2446517}
+{"t":"apk-chunk","id":9,"data":"<base64, 48 KB of APK per message>"}
+{"t":"apk-end","id":9}
+{"t":"apk-status","id":9,"state":"receiving"|"received"|"error","message":"…"}
+```
+
+## 7. Why this is not the ADB protocol
 
 Real `adb` requires the `adbd` daemon (root/system component), the ADB
 transport protocol and RSA host-key exchange. An ordinary app cannot host

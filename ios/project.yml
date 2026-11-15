@@ -1,6 +1,6 @@
 name: RemoteScreen
 options:
-  bundleIdPrefix: dev.remotescreen
+  bundleIdPrefix: com.projectbysketch
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -18,9 +18,9 @@ targets:
     info:
       path: Support/Info.plist
       properties:
-        CFBundleDisplayName: Remote Screen
+        CFBundleDisplayName: Input Bridge
         UILaunchScreen: {}
-        NSLocalNetworkUsageDescription: Remote Screen connects to your paired Android phone on the local network.
+        NSLocalNetworkUsageDescription: Input Bridge connects to your paired Android phone on the local network.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -32,5 +32,5 @@ targets:
           - UIInterfaceOrientationLandscapeRight
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.remotescreen.receiver
+        PRODUCT_BUNDLE_IDENTIFIER: com.projectbysketch.inputbridge
         TARGETED_DEVICE_FAMILY: "1,2"

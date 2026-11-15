@@ -26,6 +26,7 @@ struct ContentView: View {
     @EnvironmentObject private var store: PhoneStore
     @State private var showPair = false
     @State private var target: SessionTarget?
+    @State private var shellPhone: PairedPhone?
     @State private var editing: PairedPhone?
     @State private var editHost = ""
 
@@ -42,12 +43,15 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(phone.name).font(.headline)
                         Text(phone.host).font(.subheadline).foregroundStyle(.secondary)
-                        HStack {
+                        HStack(spacing: 8) {
                             Button("Mirror") { target = SessionTarget(phone: phone, mode: .mirror) }
                                 .buttonStyle(.borderedProminent)
                             Button("Second screen") { target = SessionTarget(phone: phone, mode: .virtual) }
                                 .buttonStyle(.bordered)
+                            Button("Console") { shellPhone = phone }
+                                .buttonStyle(.bordered)
                         }
+                        .font(.footnote)
                     }
                     .padding(.vertical, 4)
                     .swipeActions {
@@ -71,6 +75,7 @@ struct ContentView: View {
                 Button { showPair = true } label: { Image(systemName: "plus") }
             }
             .sheet(isPresented: $showPair) { PairView() }
+            .sheet(item: $shellPhone) { phone in ShellView(phone: phone) }
             .fullScreenCover(item: $target) { t in
                 SessionView(phone: t.phone, mode: t.mode)
             }
@@ -253,9 +258,15 @@ struct SessionView: View {
             ZStack {
                 Color.black
                 GeometryReader { geo in
-                    VideoSurface(renderer: model.renderer)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .gesture(dragGesture(in: geo.size))
+                    ZStack {
+                        VideoSurface(renderer: model.renderer)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                        // A SwiftUI layer on top, so touches are never swallowed by the
+                        // UIView that hosts the video layer.
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(dragGesture(in: geo.size))
+                    }
                 }
                 if !model.isLive || model.ended {
                     VStack(spacing: 12) {
@@ -268,7 +279,7 @@ struct SessionView: View {
                     .allowsHitTesting(false)
                 }
             }
-            if model.isLive && !model.touchEnabled {
+            if model.isLive && !model.touchEnabled && !model.keysEnabled {
                 Text("View only. Enable Remote Screen input in the phone's Accessibility settings to control it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -317,7 +328,7 @@ struct SessionView: View {
                 .submitLabel(.send)
                 .onSubmit(sendText)
             Button("Send", action: sendText)
-                .disabled(text.isEmpty)
+                .disabled(text.isEmpty || !model.keysEnabled)
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -358,6 +369,6 @@ struct SessionView: View {
         } label: {
             Image(systemName: icon).frame(maxWidth: .infinity, minHeight: 44)
         }
-        .disabled(!model.touchEnabled)
+        .disabled(!model.keysEnabled)
     }
 }

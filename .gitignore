@@ -11,3 +11,4 @@ ios/Support/
 ios/build/
 ios/Payload/
 ios/*.ipa
+ios/RemoteScreen/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png

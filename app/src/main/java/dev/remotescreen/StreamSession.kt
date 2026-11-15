@@ -53,6 +53,15 @@ class StreamSession(
         }
     }
 
+    /** Any receiver-bound control message (shell replies, status). */
+    fun sendControl(json: JSONObject) {
+        try {
+            channel.send(Msg.CONTROL, json.toString().toByteArray(Charsets.UTF_8))
+        } catch (e: Exception) {
+            close()
+        }
+    }
+
     fun sendFrame(data: ByteArray, keyFrame: Boolean, ptsUs: Long) {
         if (closed.get()) return
         val payload = ByteArray(9 + data.size)

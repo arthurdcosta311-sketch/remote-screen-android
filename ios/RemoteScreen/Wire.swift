@@ -11,6 +11,7 @@ enum Proto {
     static let pairPort: UInt16 = 7000
     static let mirrorPort: UInt16 = 7001
     static let virtualPort: UInt16 = 7002
+    static let shellPort: UInt16 = 7003
 
     enum Msg {
         static let control: UInt8 = 0x10

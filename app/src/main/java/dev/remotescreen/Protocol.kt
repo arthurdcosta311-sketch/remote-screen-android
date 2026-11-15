@@ -9,6 +9,9 @@ object Ports {
 
     /** Virtual second display session (a screen that is not drawn on the phone). */
     const val VIRTUAL = 7002
+
+    /** App-level remote shell and APK push ("adb-style", not adbd). */
+    const val SHELL = 7003
 }
 
 object Msg {

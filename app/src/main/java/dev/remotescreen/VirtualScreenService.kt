@@ -84,6 +84,7 @@ class VirtualScreenService : Service() {
                         .put("height", h)
                         .put("fps", f)
                         .put("touch", false)
+                        .put("keys", TouchService.instance != null)
                 )
             },
             onFrame = { data, key, pts -> stream.sendFrame(data, key, pts) },
@@ -101,6 +102,9 @@ class VirtualScreenService : Service() {
         when (json.optString("t")) {
             "text" -> screen?.message = json.optString("v")
             "name" -> screen?.receiverName = json.optString("v")
+            // Taps make no sense on the second display, but the phone-wide
+            // Back/Home/Recents keys do, so they work from either session.
+            "key" -> TouchService.instance?.globalAction(json.optString("k"))
             "bye" -> session?.close()
         }
     }

@@ -6,6 +6,7 @@ on:
     paths:
       - "app/**"
       - "ios/**"
+      - "tools/**"
       - ".github/workflows/release.yml"
     tags: ["v*"]
   workflow_dispatch:
@@ -43,6 +44,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Draw the app icon
+        run: python3 tools/make_icon.py
       - name: Generate Xcode project
         working-directory: ios
         run: xcodegen generate
@@ -90,7 +93,7 @@ jobs:
           TAG="$INPUT_TAG"
           if [ -z "$TAG" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then TAG="$GITHUB_REF_NAME"; fi
           if [ -z "$TAG" ]; then TAG="v1.0.${{ github.run_number }}"; fi
-          NOTES="Android: remote-screen-debug.apk (debug-signed, installs as is).
+          NOTES="Android (com.projectbysketch.inputbridge): remote-screen-debug.apk, debug-signed and installable as is. Pairing-code mirroring, second display, and the remote shell on port 7003 with app/process control and APK push.
           iPhone receiver: RemoteScreen.ipa (unsigned: sideload it with AltStore, Sideloadly or TrollStore, which sign it with your Apple ID)."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/apk/remote-screen-debug.apk dist/ipa/RemoteScreen.ipa --clobber

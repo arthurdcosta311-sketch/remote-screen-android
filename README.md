@@ -9,9 +9,14 @@ ADB-style:
    **7002**. It is *not* shown on the phone, so the phone keeps working normally
    while the receiver watches that screen.
 
-Plus: pairing-code pairing (port **7000**), optional **unattended access** for
-already-paired receivers, optional **device administrator**, and optional
-**touch/key input** through the accessibility service.
+Plus: pairing-code pairing (port **7000**), a **remote shell** (port **7003**)
+with app/process control, rotation, mirroring and APK push, optional
+**unattended access** for already-paired receivers, optional **device
+administrator**, and optional **touch/key input** through the accessibility
+service.
+
+Application id: `com.projectbysketch.inputbridge` (both the APK and the iPhone
+app).
 
 The receiver is a separate app (you are writing the iPhone side); the wire
 protocol is in [PROTOCOL.md](PROTOCOL.md).
@@ -45,16 +50,18 @@ VideoToolbox; iOS 16+). The Xcode project is generated from `ios/project.yml`
 with [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```bash
+python3 tools/make_icon.py     # draws the app icon into the asset catalog
 cd ios && xcodegen generate && open RemoteScreen.xcodeproj
 ```
 
-The GitHub Actions workflow `.github/workflows/release.yml` builds the debug APK
-and an **unsigned** IPA and attaches both to a GitHub release (on pushes to
-`main`, on `v*` tags, or manually with a tag name). The IPA has to be signed
-by whatever installs it (AltStore, Sideloadly, TrollStore).
+The GitHub Actions workflow `.github/workflows/release.yml` draws the icon,
+builds the debug APK and an **unsigned** IPA, and attaches both to a GitHub
+release (on pushes to `main`, on `v*` tags, or manually with a tag name). The
+IPA has to be signed by whatever installs it (AltStore, Sideloadly, TrollStore).
 
 In the iPhone app tap **+**, enter the phone's IP address, check that the six
 digits shown there match the phone's dialog, and tap **Pair** on the phone.
+Each paired phone then offers **Mirror**, **Second screen** and **Console**.
 
 ## Using it
 
@@ -73,8 +80,18 @@ digits shown there match the phone's dialog, and tap **Pair** on the phone.
    session notification is still always shown.
 6. **Input** is view-only by default. Enable *Remote Screen input* in
    Accessibility settings to let the receiver tap, swipe and press
-   Back/Home. Text can be sent into the focused field.
-7. **Device administrator** is optional and separate: it gives the standard
+   Back/Home. Text can be sent into the focused field. On the second display
+   taps are meaningless, so only the keys and typing are offered there.
+7. **Remote shell** → **Start remote shell** listens on port **7003** and gives
+   the receiver a console: `apps`, `ps`, `inspect`, `start`, `kill`, `stop`,
+   `disable`, `enable`, `uninstall`, `rotate`, `reboot`, `mirror`, `lock` and
+   `shell <command>`. Two permissions make parts of it work: *Modify system
+   settings* (for `rotate`) and *Install unknown apps* (for the APK push).
+   Root and device owner add `stop`, `disable` and `reboot`.
+8. **Push an APK** from the receiver's console ⋯ toolbar button: the file goes
+   over the encrypted session into the phone's cache, and the phone posts a
+   notification that opens Android's install dialog.
+9. **Device administrator** is optional and separate: it gives the standard
    admin powers (lock now). It never blocks uninstall and cannot hide itself.
 
 ## Security model
@@ -109,10 +126,15 @@ digits shown there match the phone's dialog, and tap **Pair** on the phone.
   text message sent from the receiver. It cannot host other apps' windows.
 * Real ADB is not implemented. Android's ADB requires the `adbd` daemon and RSA
   host keys, which no ordinary app can host, and an iPhone cannot act as an ADB
-  host. The app's pairing copies ADB's *user experience*. If you need literal
+  host. The remote shell on port 7003 is an **app-level** shell with an
+  ADB-like command set, not `adbd`: it runs as the app's own uid, and the
+  commands that need system rights (`stop`, `disable`, `reboot`) only work with
+  root or a device-owner install — otherwise they say so. If you need literal
   ADB, a device-owner install can switch Wireless debugging on for you from the
   **ADB settings** button, and you pair a real ADB host from Android's own
   dialog.
+* Installing a pushed APK always ends with Android's install dialog; the app
+  cannot install silently, and it does not try to.
 
 ## Only for devices you own or are authorized to control
 
