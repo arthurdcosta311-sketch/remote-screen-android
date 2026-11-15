@@ -12,7 +12,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
-import java.util.concurrent.TimeUnit
+import java.util.Timer
+import java.util.TimerTask
 
 /**
  * The command language behind the remote shell on port 7003.
@@ -328,7 +329,7 @@ class ShellEngine(private val ctx: Context) {
 
     fun hasRoot(): Boolean {
         if (rootChecked) return rootAvailable
-        val r = runProcess(arrayOf("su", "-c", "id"), 4_000)
+        val r = runProcess(arrayOf("su", "-c", "id"), 8_000)
         rootAvailable = r.first == 0 && r.second.contains("uid=0")
         rootChecked = true
         return rootAvailable
@@ -336,15 +337,22 @@ class ShellEngine(private val ctx: Context) {
 
     private fun admin() = ComponentName(ctx, AdminReceiver::class.java)
 
+    /**
+     * Runs a command and returns (exit code, combined output). A watchdog kills it at
+     * [timeoutMs] so a waiting `su` prompt or a stuck child can never block the shell.
+     */
     private fun runProcess(command: Array<String>, timeoutMs: Long): Pair<Int, String> = try {
         val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+        val watchdog = Timer("shell-watchdog", true)
+        watchdog.schedule(object : TimerTask() {
+            override fun run() {
+                if (process.isAlive) process.destroyForcibly()
+            }
+        }, timeoutMs)
         val output = process.inputStream.bufferedReader().use { it.readText() }
-        if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
-            process.destroyForcibly()
-            124 to (output + "\n# timed out\n")
-        } else {
-            process.exitValue() to output
-        }
+        val exit = process.waitFor()
+        watchdog.cancel()
+        if (exit == 137) 124 to (output + "\n# timed out\n") else exit to output
     } catch (e: Exception) {
         -1 to "${e.message ?: "command failed"}\n"
     }
