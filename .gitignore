@@ -6,7 +6,6 @@ local.properties
 .idea/
 captures/
 
-
 ios/RemoteScreen.xcodeproj/
 ios/Support/
 ios/build/
