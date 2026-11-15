@@ -83,16 +83,44 @@ Each paired phone then offers **Mirror**, **Second screen** and **Console**.
    Back/Home. Text can be sent into the focused field. On the second display
    taps are meaningless, so only the keys and typing are offered there.
 7. **Remote shell** → **Start remote shell** listens on port **7003** and gives
-   the receiver a console: `apps`, `ps`, `inspect`, `start`, `kill`, `stop`,
-   `disable`, `enable`, `uninstall`, `rotate`, `reboot`, `mirror`, `lock` and
-   `shell <command>`. Two permissions make parts of it work: *Modify system
-   settings* (for `rotate`) and *Install unknown apps* (for the APK push).
-   Root and device owner add `stop`, `disable` and `reboot`.
-8. **Push an APK** from the receiver's console ⋯ toolbar button: the file goes
+   the receiver a console: `access`, `apps`, `ps`, `inspect`, `start`, `kill`,
+   `stop`, `disable`, `enable`, `uninstall`, `rotate`, `brightness`, `timeout`,
+   `volume`, `key`, `tap`, `swipe`, `open`, `notify`, `reboot`, `mirror`,
+   `lock` and `shell <command>`. Most of it needs no unlock; `access` says
+   exactly what this install may do. Two permissions add the rest: *Modify
+   system settings* (rotation, brightness, screen timeout) and *Install unknown
+   apps* (the APK push).
+8. **Push an APK** from the receiver's console toolbar button: the file goes
    over the encrypted session into the phone's cache, and the phone posts a
    notification that opens Android's install dialog.
 9. **Device administrator** is optional and separate: it gives the standard
    admin powers (lock now). It never blocks uninstall and cannot hide itself.
+
+## Unlocking the rest
+
+`stop` (force-stop), `disable`/`enable` and `reboot` need more than an app is
+normally given. The app can use two things, and the **Access level** panel at
+the top of the phone's screen shows which one it has:
+
+* **Root** — if the phone is rooted, tap **Test root** and grant the prompt.
+  Force-stop, disable, uninstall and reboot all work through `su`.
+* **Device owner** — tap **Copy device-owner command** and run it once from a
+  computer that is already allowed to debug the phone:
+
+  ```bash
+  adb shell dpm set-device-owner com.projectbysketch.inputbridge/dev.remotescreen.AdminReceiver
+  ```
+
+  That makes the app the device owner, which unlocks hiding packages
+  (`disable`, `enable`) and `reboot`. Force-stop still needs root: Android
+  gives no ordinary app that power.
+
+**Wireless debugging is not a door.** Android 11 pairs a debugging *host* to
+the phone over TLS with a SPAKE2 key exchange implemented only in Android's
+own BoringSSL, and the debugging port then requires the client certificate that
+the pairing produced. Neither the Android SDK nor an iPhone exposes that
+handshake, so `adb pair` can only run on a computer — turning wireless
+debugging on does not give any app on the phone a shell.
 
 ## Security model
 
@@ -124,15 +152,14 @@ Each paired phone then offers **Mirror**, **Second screen** and **Console**.
   renegotiate the stream.
 * The second display is rendered by this app: it shows its own dashboard plus a
   text message sent from the receiver. It cannot host other apps' windows.
-* Real ADB is not implemented. Android's ADB requires the `adbd` daemon and RSA
-  host keys, which no ordinary app can host, and an iPhone cannot act as an ADB
-  host. The remote shell on port 7003 is an **app-level** shell with an
-  ADB-like command set, not `adbd`: it runs as the app's own uid, and the
-  commands that need system rights (`stop`, `disable`, `reboot`) only work with
-  root or a device-owner install — otherwise they say so. If you need literal
-  ADB, a device-owner install can switch Wireless debugging on for you from the
-  **ADB settings** button, and you pair a real ADB host from Android's own
-  dialog.
+* Real ADB is not implemented, and wireless debugging does not change that. The
+  remote shell on port 7003 is an **app-level** shell with an ADB-like command
+  set: it runs as the app's own uid, and the commands that need system rights
+  (`stop`, `disable`, `reboot`) work with root or a device-owner install and say
+  so when neither is there — see **Unlocking the rest** above. If you need
+  literal ADB, a device-owner install can switch Wireless debugging on for you
+  from the **ADB settings** button, and you pair a real ADB host from Android's
+  own dialog.
 * Installing a pushed APK always ends with Android's install dialog; the app
   cannot install silently, and it does not try to.
 

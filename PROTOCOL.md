@@ -174,10 +174,27 @@ chooses; the phone answers with the same `id`.
 {"t":"shell","id":7,"code":0,"out":"…","err":"…"}    phone → receiver
 ```
 
-The command line is the phone's app-level shell (`help` lists it): `apps`,
-`ps`, `inspect`, `start`, `kill`, `stop`, `disable`, `enable`, `uninstall`,
-`rotate`, `reboot`, `mirror`, `lock`, `shell`. Commands that need system rights
-use root or the device owner and fail with a message when neither is there.
+The command line is the phone's app-level shell (`help` lists it): `access`,
+`device`, `apps`, `ps`, `inspect`, `battery`, `storage`, `network`, `start`,
+`kill`, `stop`, `disable`, `enable`, `uninstall`, `rotate`, `brightness`,
+`timeout`, `volume`, `key`, `tap`, `swipe`, `open`, `notify`, `reboot`,
+`mirror`, `lock`, `shell`.
+
+`access` reports the level the install is at and what it unlocks:
+
+* **app** — no unlock needed: mirroring, input, app and process lists, `kill`,
+  `rotate`, `brightness`, `timeout`, `volume`, `key`, `tap`, `swipe`, `open`,
+  `notify`, and the APK push.
+* **device owner** (`adb shell dpm set-device-owner …` from an authorised
+  computer) — adds `disable`/`enable` (hide/unhide a package) and `reboot`.
+* **root** — adds `stop` (force-stop), `uninstall` and `reboot`.
+
+Android's wireless-debugging pairing is deliberately not part of this protocol:
+Android 11+ pairs a debugging *host* over TLS with a SPAKE2 key exchange that
+lives in Android's own BoringSSL, and the debugging port then requires the
+client certificate that pairing produced. No app — on the phone or behind a
+receiver — can perform that handshake, so `adb pair` remains a computer-side
+tool and enabling wireless debugging gives this app nothing.
 
 APK push is chunked, base64 in JSON, and always ends with Android's own install
 dialog:

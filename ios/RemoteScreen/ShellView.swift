@@ -153,6 +153,12 @@ struct ShellView: View {
                 chip("Auto-rotate") { run("rotate auto") }
                 chip("Start mirroring") { run("mirror") }
                 chip("Lock") { run("lock") }
+                chip("Access") { run("access") }
+                chip("Volume up") { run("volume up") }
+                chip("Volume down") { run("volume down") }
+                chip("Mute") { run("volume mute") }
+                chip("Battery") { run("battery") }
+                chip("Network") { run("network") }
                 chip("Device info") { run("device") }
                 chip("Apps") {
                     run("apps all")

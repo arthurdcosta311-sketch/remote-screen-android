@@ -8,8 +8,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
+import android.os.Environment
+import android.os.StatFs
 import android.os.SystemClock
 import android.provider.Settings
 import java.util.Timer
@@ -59,6 +65,18 @@ class ShellEngine(private val ctx: Context) {
                 "reboot" -> Result(0, reboot(pkg), "")
                 "mirror" -> Result(0, mirror(), "")
                 "lock" -> Result(0, lock(), "")
+                "access" -> Result(0, Access.summary(ctx), "")
+                "volume" -> Result(0, volume(pkg), "")
+                "brightness" -> Result(0, brightness(pkg), "")
+                "timeout" -> Result(0, screenTimeout(pkg), "")
+                "battery" -> Result(0, battery(), "")
+                "storage" -> Result(0, storage(), "")
+                "network" -> Result(0, network(), "")
+                "notify" -> Result(0, notifyPhone(args.joinToString(" ")), "")
+                "open" -> Result(0, openUrl(pkg), "")
+                "key" -> Result(0, key(pkg), "")
+                "tap" -> Result(0, tap(args), "")
+                "swipe" -> Result(0, swipe(args), "")
                 "shell" -> shell(args.joinToString(" "))
                 else -> Result(127, "", "unknown command '$cmd' — try help\n")
             }
@@ -224,7 +242,15 @@ class ShellEngine(private val ctx: Context) {
 
     private fun stop(pkg: String): String {
         val r = runProcess(arrayOf("su", "-c", "am force-stop $pkg"), 10_000)
-        if (r.first == 0 && !r.second.contains("Error")) return "force-stopped $pkg\n"
+        if (r.first == 0 && !r.second.contains("Error")) return "force-stopped $pkg (root)\n"
+        val dpm = ctx.getSystemService(DevicePolicyManager::class.java)
+        if (dpm != null && dpm.isDeviceOwnerApp(ctx.packageName) && dpm.isAdminActive(admin())) {
+            val failed = runCatching { dpm.setPackagesSuspended(admin(), arrayOf(pkg), true) }.getOrNull()
+            if (failed != null) {
+                return "suspended $pkg (device owner)\n" +
+                    "# Android gives no ordinary app a force-stop; a suspended app is greyed out and cannot run.\n"
+            }
+        }
         return "error: force-stop needs root — Android gives no ordinary app that power\n"
     }
 
@@ -325,6 +351,149 @@ class ShellEngine(private val ctx: Context) {
         return Result(r.first, r.second, err)
     }
 
+    // ------------------------------------------------ commands with no unlock
+
+    private fun volume(arg: String?): String {
+        val audio = ctx.getSystemService(AudioManager::class.java)
+            ?: return "error: no audio manager\n"
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        when (arg?.lowercase()) {
+            null, "" -> {}
+            "up" -> audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI
+            )
+            "down" -> audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI
+            )
+            "mute" -> audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI
+            )
+            "unmute" -> audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI
+            )
+            else -> {
+                val percent = arg?.toIntOrNull() ?: return "usage: volume up|down|mute|unmute|0-100\n"
+                val index = (max * percent.coerceIn(0, 100)) / 100
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, AudioManager.FLAG_SHOW_UI)
+            }
+        }
+        val now = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        return "volume   $now of $max${if (audio.isStreamMute(AudioManager.STREAM_MUSIC)) " (muted)" else ""}\n"
+    }
+
+    private fun brightness(arg: String?): String {
+        if (!Settings.System.canWrite(ctx)) return "error: allow \"Modify system settings\" first\n"
+        if (arg.equals("auto", ignoreCase = true)) {
+            Settings.System.putInt(
+                ctx.contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS_MODE,
+                Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+            )
+            return "brightness auto\n"
+        }
+        val percent = arg?.toIntOrNull() ?: return "usage: brightness 0-100|auto\n"
+        Settings.System.putInt(
+            ctx.contentResolver,
+            Settings.System.SCREEN_BRIGHTNESS_MODE,
+            Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+        )
+        Settings.System.putInt(
+            ctx.contentResolver,
+            Settings.System.SCREEN_BRIGHTNESS,
+            (percent.coerceIn(0, 100) * 255) / 100
+        )
+        return "brightness ${percent.coerceIn(0, 100)}%\n"
+    }
+
+    private fun screenTimeout(arg: String?): String {
+        if (!Settings.System.canWrite(ctx)) return "error: allow \"Modify system settings\" first\n"
+        val seconds = arg?.toIntOrNull() ?: return "usage: timeout <seconds>\n"
+        val clamped = seconds.coerceIn(15, 3600)
+        Settings.System.putInt(ctx.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, clamped * 1000)
+        return "screen off after ${clamped}s\n"
+    }
+
+    private fun battery(): String {
+        val battery = ctx.getSystemService(BatteryManager::class.java)
+        val percent = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val status = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS) ?: -1
+        val plugged = when (status) {
+            BatteryManager.BATTERY_STATUS_CHARGING -> "charging"
+            BatteryManager.BATTERY_STATUS_FULL -> "full"
+            BatteryManager.BATTERY_STATUS_DISCHARGING -> "on battery"
+            else -> "unknown"
+        }
+        val memory = ActivityManager.MemoryInfo()
+        ctx.getSystemService(ActivityManager::class.java)?.getMemoryInfo(memory)
+        return "battery  $percent% ($plugged)\n" +
+            "memory   ${memory.availMem / 1024 / 1024} MB free of ${memory.totalMem / 1024 / 1024} MB\n"
+    }
+
+    private fun storage(): String {
+        val stat = StatFs(Environment.getDataDirectory().path)
+        return "storage  ${stat.availableBytes / 1024 / 1024} MB free of ${stat.totalBytes / 1024 / 1024} MB\n"
+    }
+
+    private fun network(): String {
+        val manager = ctx.getSystemService(ConnectivityManager::class.java)
+        val caps = manager?.let { m -> m.activeNetwork?.let { n -> m.getNetworkCapabilities(n) } }
+        val transport = when {
+            caps == null -> "none"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            else -> "other"
+        }
+        return buildString {
+            append("network  $transport\n")
+            append("address  ${Net.localAddresses().joinToString(" ")}\n")
+            append("ports    pair ${Ports.PAIR} mirror ${Ports.MIRROR} second ${Ports.VIRTUAL} shell ${Ports.SHELL}\n")
+        }
+    }
+
+    private fun notifyPhone(text: String): String {
+        if (text.isBlank()) return "usage: notify <text>\n"
+        Notifications.result(ctx, "From the receiver", text)
+        return "notification posted\n"
+    }
+
+    private fun openUrl(arg: String?): String {
+        if (arg.isNullOrBlank()) return "usage: open <url>\n"
+        val uri = Uri.parse(if (arg.contains("://")) arg else "https://$arg")
+        return try {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "opened $uri\n"
+        } catch (e: Exception) {
+            "error: ${e.message}\n"
+        }
+    }
+
+    private fun key(arg: String?): String {
+        val touch = TouchService.instance ?: return "error: enable the accessibility service first\n"
+        val name = arg?.lowercase() ?: return "usage: key back|home|recents|notifications|lock\n"
+        return if (touch.globalAction(name)) "sent $name\n" else "error: unknown key $name\n"
+    }
+
+    private fun tap(args: List<String>): String {
+        val touch = TouchService.instance ?: return "error: enable the accessibility service first\n"
+        val x = args.getOrNull(0)?.toIntOrNull() ?: return "usage: tap <x> <y>\n"
+        val y = args.getOrNull(1)?.toIntOrNull() ?: return "usage: tap <x> <y>\n"
+        touch.tap(x, y)
+        return "tapped $x,$y\n"
+    }
+
+    private fun swipe(args: List<String>): String {
+        val touch = TouchService.instance ?: return "error: enable the accessibility service first\n"
+        val p = args.mapNotNull { it.toIntOrNull() }
+        if (p.size < 4) return "usage: swipe <x1> <y1> <x2> <y2>\n"
+        touch.touchDown(p[0], p[1])
+        for (step in 1..8) {
+            touch.touchMove(p[0] + (p[2] - p[0]) * step / 8, p[1] + (p[3] - p[1]) * step / 8)
+        }
+        touch.touchUp()
+        return "swiped ${p[0]},${p[1]} to ${p[2]},${p[3]}\n"
+    }
+
     // ----------------------------------------------------------------- helpers
 
     fun hasRoot(): Boolean {
@@ -363,30 +532,47 @@ class ShellEngine(private val ctx: Context) {
             ── inspect ──────────────────────────────
             help                    this text
             device                  model, android, root, owner, ports
+            access                  what this install may do, and how to unlock more
             apps [all|user|system] [filter]
                                     packages: pkg, label, version, uid, kind, state
             ps                      processes: pid, usr|system, name
             inspect <pkg>           version, uid, sdk, apk, data dir, permissions
+            battery                 charge, charging state, memory
+            storage                 free space on /data
+            network                 transport, addresses, ports
             ── apps and processes ───────────────────
             start <pkg>             launch an app
             kill <pkg>              kill its background processes (no root needed)
-            stop <pkg>              force-stop (root)
+            stop <pkg>              force-stop (root) or suspend (device owner)
             disable <pkg>           hide it (device owner) or pm disable-user (root)
             enable <pkg>            undo disable
             uninstall <pkg>         uninstall (root) or Android's own confirm dialog
             ── device ──────────────────────────────
             rotate 0|90|180|270|auto
                                     lock the rotation (needs "Modify system settings")
+            brightness 0-100|auto   screen brightness (same permission)
+            timeout <seconds>       screen-off delay (same permission)
+            volume up|down|mute|unmute|0-100
+                                    media volume
+            key back|home|recents|notifications|lock
+                                    phone-wide key (accessibility service)
+            tap <x> <y>             tap at a pixel (accessibility service)
+            swipe <x1> <y1> <x2> <y2>
+                                    swipe between pixels (accessibility service)
+            open <url>              open a link on the phone
+            notify <text>           post a notification on the phone
             reboot [recovery|bootloader]
-                                    device owner or root
+                                    root or device owner
             mirror                  ask the phone to start screen mirroring
             lock                    lock the screen
             ── anything else ────────────────────────
             shell <command>         /system/bin/sh, as this app's uid
 
         APKs are pushed from the receiver and installed after the owner taps
-        Android's install dialog. Commands that need root print an error when the
-        phone has none; nothing here bypasses a consent screen.
+        Android's install dialog. Wireless-debugging pairing is not reachable
+        from inside an app (Android pairs hosts over TLS with SPAKE2 in its own
+        BoringSSL), so run `access` to see what root or a device-owner install
+        would add. Nothing here bypasses a consent screen.
         """.trimIndent() + "\n"
     }
 }

@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -31,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var adminButton: Button
     private lateinit var touchButton: Button
     private lateinit var shellButton: Button
+    private lateinit var accessView: TextView
     private lateinit var unattendedSwitch: Switch
     private var pairing: PairingServer? = null
     private var pairingStatus: String = ""
@@ -195,6 +198,38 @@ class MainActivity : Activity() {
         }.onFailure { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
+    // ---------------------------------------------------------------- access
+
+    private fun refreshAccess() {
+        if (!::accessView.isInitialized) return
+        Thread {
+            val summary = Access.summary(this)
+            runOnUiThread { if (!isFinishing && !isDestroyed) accessView.text = summary }
+        }.start()
+    }
+
+    private fun testRoot() {
+        toast("Asking for root…")
+        Thread {
+            Access.resetRoot()
+            val ok = Access.hasRoot(this)
+            runOnUiThread {
+                toast(
+                    if (ok) "Root works: force-stop, disable and reboot are unlocked"
+                    else "No root: the prompt was denied, or su is not installed"
+                )
+                refreshAccess()
+            }
+        }.start()
+    }
+
+    private fun copyOwnerCommand() {
+        val command = Access.deviceOwnerCommand(this)
+        getSystemService(ClipboardManager::class.java)
+            ?.setPrimaryClip(ClipData.newPlainText("device owner", command))
+        toast(command)
+    }
+
     // ------------------------------------------------------------------ admin
 
     private fun adminComponent() = ComponentName(this, AdminReceiver::class.java)
@@ -346,6 +381,15 @@ class MainActivity : Activity() {
         root.addView(row)
         root.addView(body("Off by default. When off, every session waits for your Allow/Deny notification. Turning it on still needs a receiver that already paired here, and the session notification stays visible."))
 
+        root.addView(section("ACCESS LEVEL"))
+        accessView = body("checking…", "#3DDC97").apply { typeface = Typeface.MONOSPACE }
+        root.addView(accessView)
+        root.addView(body("Wireless debugging does not help this app. Since Android 11 the phone pairs a debugging host over TLS with a SPAKE2 key exchange that exists only in Android's own BoringSSL, so adb pair runs on a computer, and the debugging port refuses anything that was not paired. Two things do unlock the rest on the phone itself:"))
+        root.addView(action("Test root") { testRoot() })
+        root.addView(body("Rooted phone: grant the prompt and force-stop, disable, uninstall and reboot all work.", "#5B6673", 12f))
+        root.addView(action("Copy device-owner command") { copyOwnerCommand() })
+        root.addView(body("Run that once from a computer already allowed to debug this phone. It makes this app the device owner, which unlocks disable, enable and reboot.", "#5B6673", 12f))
+
         root.addView(section("REMOTE SHELL (ADB-STYLE)"))
         root.addView(body("A command line for a paired receiver on port ${Ports.SHELL}: app and process lists, start / kill / disable / uninstall, rotation, mirroring, and pushing an APK. Android gives ordinary apps no adbd, so commands that need system rights use root or the device owner and say so when they cannot."))
         shellButton = action("Start remote shell") { toggleShell() }
@@ -389,6 +433,7 @@ class MainActivity : Activity() {
             if (ShellService.running) "Stop remote shell" else "Start remote shell"
         unattendedSwitch.isChecked = PairingStore.unattended(this)
         renderPeers()
+        refreshAccess()
     }
 
     private fun renderPeers() {
