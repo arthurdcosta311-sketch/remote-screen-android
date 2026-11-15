@@ -187,9 +187,12 @@ class ShellEngine(private val ctx: Context) {
 
     private fun systemPackages(): Set<String> {
         systemPackagesCache?.let { return it }
-        val set = ctx.packageManager.getInstalledPackages(0).mapNotNullTo(mutableSetOf()) { info ->
+        val set = mutableSetOf<String>()
+        for (info in ctx.packageManager.getInstalledPackages(0)) {
             val app = info.applicationInfo
-            if (app != null && (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0) info.packageName else null
+            if (app != null && (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0) {
+                set.add(info.packageName)
+            }
         }
         systemPackagesCache = set
         return set
@@ -214,7 +217,6 @@ class ShellEngine(private val ctx: Context) {
         val am = ctx.getSystemService(ActivityManager::class.java)
             ?: return "error: no activity manager\n"
         am.killBackgroundProcesses(pkg)
-        ctx.packageManager.getLaunchIntentForPackage(pkg)
         return "asked Android to kill the background processes of $pkg\n" +
             "# Apps in the foreground are not killed; use stop for that (root).\n"
     }
