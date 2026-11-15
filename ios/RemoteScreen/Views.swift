@@ -16,6 +16,18 @@ struct RemoteScreenApp: App {
 
 // MARK: - Phone list
 
+extension View {
+    /// The ADB screen exists only in builds that linked libadb.
+    @ViewBuilder
+    func adbSheet(phone: Binding<PairedPhone?>) -> some View {
+        #if ADB_MOBILE
+        sheet(item: phone) { entry in AdbView(phone: entry) }
+        #else
+        self
+        #endif
+    }
+}
+
 struct SessionTarget: Identifiable {
     let phone: PairedPhone
     let mode: StreamMode
@@ -27,6 +39,7 @@ struct ContentView: View {
     @State private var showPair = false
     @State private var target: SessionTarget?
     @State private var shellPhone: PairedPhone?
+    @State private var adbPhone: PairedPhone?
     @State private var editing: PairedPhone?
     @State private var editHost = ""
 
@@ -50,6 +63,10 @@ struct ContentView: View {
                                 .buttonStyle(.bordered)
                             Button("Console") { shellPhone = phone }
                                 .buttonStyle(.bordered)
+                            #if ADB_MOBILE
+                            Button("ADB") { adbPhone = phone }
+                                .buttonStyle(.bordered)
+                            #endif
                         }
                         .font(.footnote)
                     }
@@ -76,6 +93,7 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showPair) { PairView() }
             .sheet(item: $shellPhone) { phone in ShellView(phone: phone) }
+            .adbSheet(phone: $adbPhone)
             .fullScreenCover(item: $target) { t in
                 SessionView(phone: t.phone, mode: t.mode)
             }

@@ -12,3 +12,11 @@ ios/build/
 ios/Payload/
 ios/*.ipa
 ios/RemoteScreen/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+
+# adb bridge: built locally by tools/build-adb.sh
+ios/adb/
+ios/Adb.xcconfig.generated
+adb-mobile-adb_v31.0.3/output/
+adb-mobile-adb_v31.0.3/android-tools/
+adb-mobile-adb_v31.0.3/ios-cmake/
+adb-mobile-adb_v31.0.3/external/

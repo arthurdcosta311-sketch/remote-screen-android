@@ -15,6 +15,9 @@ targets:
     platform: iOS
     sources:
       - RemoteScreen
+    configFiles:
+      Debug: Adb.xcconfig
+      Release: Adb.xcconfig
     info:
       path: Support/Info.plist
       properties:
@@ -34,3 +37,4 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.projectbysketch.inputbridge
         TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_OBJC_BRIDGING_HEADER: RemoteScreen/RemoteScreen-Bridging-Header.h

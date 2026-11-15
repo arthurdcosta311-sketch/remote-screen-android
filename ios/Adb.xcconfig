@@ -1,0 +1,5 @@
+// Kept empty on purpose: without libadb the ADB bridge is not compiled, so the
+// app builds on a machine that never ran tools/build-adb.sh.
+// tools/build-adb.sh writes ios/Adb.xcconfig.generated with ADB_MOBILE=1,
+// SWIFT_ACTIVE_COMPILATION_CONDITIONS and the -ladb link flags, which the
+// release workflow copies over this file.

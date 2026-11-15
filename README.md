@@ -51,6 +51,7 @@ with [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```bash
 python3 tools/make_icon.py     # draws the app icon into the asset catalog
+./tools/build-adb.sh           # optional: builds libadb for the ADB bridge
 cd ios && xcodegen generate && open RemoteScreen.xcodeproj
 ```
 
@@ -115,12 +116,23 @@ the top of the phone's screen shows which one it has:
   (`disable`, `enable`) and `reboot`. Force-stop still needs root: Android
   gives no ordinary app that power.
 
-**Wireless debugging is not a door.** Android 11 pairs a debugging *host* to
-the phone over TLS with a SPAKE2 key exchange implemented only in Android's
-own BoringSSL, and the debugging port then requires the client certificate that
-the pairing produced. Neither the Android SDK nor an iPhone exposes that
-handshake, so `adb pair` can only run on a computer — turning wireless
-debugging on does not give any app on the phone a shell.
+**Wireless debugging opens one door: from the iPhone.** The Android app cannot
+reach adbd — Android pairs debugging *hosts* over TLS with a SPAKE2 key
+exchange that the Android SDK does not expose, so no code running inside the
+phone can pair with its own adbd. The iPhone receiver can, because it links
+[`adb-mobile`](adb-mobile-adb_v31.0.3), a port of AOSP's adb 31.0.3 including
+the pairing client and BoringSSL. On the phone open Developer options →
+Wireless debugging → **Pair device with pairing code**, then in the receiver
+tap **ADB** on that phone, type the pairing port and the six digits, tap
+**Pair**, type the other port on the same screen and tap **Connect**. From
+there `adb shell` runs as the phone's `shell` user, so force-stop,
+`pm disable-user`, `adb install` and `reboot` all work without root or a
+device-owner install.
+
+The bridge is compiled only when `tools/build-adb.sh` produced
+`ios/adb/lib/libadb-iphoneos-arm64.a`. The release workflow runs it and turns
+the feature on when it succeeds; without it the app builds and runs as before,
+just without the **ADB** button.
 
 ## Security model
 
@@ -152,14 +164,12 @@ debugging on does not give any app on the phone a shell.
   renegotiate the stream.
 * The second display is rendered by this app: it shows its own dashboard plus a
   text message sent from the receiver. It cannot host other apps' windows.
-* Real ADB is not implemented, and wireless debugging does not change that. The
-  remote shell on port 7003 is an **app-level** shell with an ADB-like command
-  set: it runs as the app's own uid, and the commands that need system rights
-  (`stop`, `disable`, `reboot`) work with root or a device-owner install and say
-  so when neither is there — see **Unlocking the rest** above. If you need
-  literal ADB, a device-owner install can switch Wireless debugging on for you
-  from the **ADB settings** button, and you pair a real ADB host from Android's
-  own dialog.
+* The phone app cannot host `adbd` (see above). Its shell on port 7003 is an
+  **app-level** shell that runs as the app's own uid, with the system-rights
+  commands depending on root or a device-owner install. Real adb lives on the
+  other side: the iPhone receiver links adb-mobile and talks to the phone's own
+  wireless debugging, so `adb shell` from the receiver gets the phone's `shell`
+  user.
 * Installing a pushed APK always ends with Android's install dialog; the app
   cannot install silently, and it does not try to.
 

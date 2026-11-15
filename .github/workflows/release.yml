@@ -7,6 +7,7 @@ on:
       - "app/**"
       - "ios/**"
       - "tools/**"
+      - "adb-mobile-adb_v31.0.3/**"
       - ".github/workflows/release.yml"
     tags: ["v*"]
   workflow_dispatch:
@@ -46,6 +47,19 @@ jobs:
         run: brew install xcodegen
       - name: Draw the app icon
         run: python3 tools/make_icon.py
+      - name: Build the adb bridge (optional)
+        continue-on-error: true
+        run: |
+          chmod +x tools/build-adb.sh
+          ./tools/build-adb.sh
+      - name: Turn the adb bridge on when it built
+        run: |
+          if [ -f ios/Adb.xcconfig.generated ]; then
+            cp ios/Adb.xcconfig.generated ios/Adb.xcconfig
+            echo "adb bridge enabled"
+          else
+            echo "::warning::the adb bridge was not built; this IPA ships without it"
+          fi
       - name: Generate Xcode project
         working-directory: ios
         run: xcodegen generate
@@ -94,7 +108,7 @@ jobs:
           if [ -z "$TAG" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then TAG="$GITHUB_REF_NAME"; fi
           if [ -z "$TAG" ]; then TAG="v1.0.${{ github.run_number }}"; fi
           NOTES="Android (com.projectbysketch.inputbridge): remote-screen-debug.apk, debug-signed and installable as is. Pairing-code mirroring, second display, and the remote shell on port 7003 with app/process control and APK push.
-          iPhone receiver: RemoteScreen.ipa (unsigned: sideload it with AltStore, Sideloadly or TrollStore, which sign it with your Apple ID)."
+          iPhone receiver: RemoteScreen.ipa (unsigned: sideload it with AltStore, Sideloadly or TrollStore, which sign it with your Apple ID). When the adb-mobile bridge built, the receiver also drives real adb: pair with the phone's Wireless debugging and force-stop, disable and install as the shell user."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/apk/remote-screen-debug.apk dist/ipa/RemoteScreen.ipa --clobber
           else
